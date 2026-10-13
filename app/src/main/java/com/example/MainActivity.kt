@@ -467,6 +467,7 @@ class MainActivity : ComponentActivity() {
 
         val viewModel: MainViewModel by viewModels {
             MainViewModelFactory(application)
+        }
         setContent {
             var showSplash by remember { mutableStateOf(true) }
             val darkModeState by viewModel.darkMode.collectAsStateWithLifecycle()
@@ -3749,7 +3750,7 @@ fun ReminderCard(reminder: Reminder, viewModel: MainViewModel) {
                                     AlertSoundTester.stopSound()
                                     isSoundPlaying = false
                                 } else {
-                                    AlertSoundTester.playSound(context)
+                                    AlertSoundTester.playSound(context, "Notification")
                                     isSoundPlaying = true
                                 }
                             }
@@ -8179,7 +8180,7 @@ object AlertSoundTester {
         }
     }
 
-    fun playSound(context: Context, soundType: String, textToSpeak: String = "Test Sound") {
+    fun playSound(context: Context, soundType: String = "Notification", textToSpeak: String = "Test Sound") {
         try {
             currentRingtone?.let {
                 if (it.isPlaying) {
