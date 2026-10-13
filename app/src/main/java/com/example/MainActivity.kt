@@ -467,10 +467,6 @@ class MainActivity : ComponentActivity() {
 
         val viewModel: MainViewModel by viewModels {
             MainViewModelFactory(application)
-        }
-
-        AlertSoundTester.initTts(applicationContext)
-
         setContent {
             var showSplash by remember { mutableStateOf(true) }
             val darkModeState by viewModel.darkMode.collectAsStateWithLifecycle()
@@ -910,55 +906,197 @@ fun MainAppScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .testTag("app_scaffold"),
         topBar = {
+            val isDarkTheme by viewModel.darkMode.collectAsStateWithLifecycle()
+            val uncompletedRemindersCount = remember(remindersList) {
+                remindersList.count { it.status != "Done" }
+            }
+            val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+
             TopAppBar(
+                modifier = Modifier.drawBehind {
+                    drawLine(
+                        color = dividerColor,
+                        start = Offset(0f, size.height),
+                        end = Offset(size.width, size.height),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                },
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        // High-fidelity Vodafone Logo squircle badge
                         Box(
                             modifier = Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFE60000).copy(alpha = 0.08f))
-                                .border(1.dp, Color(0xFFE60000).copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                                .padding(4.dp)
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(Color(0xFFE60000), Color(0xFFB70100))
+                                    )
+                                )
+                                .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                                .padding(5.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             VodafoneLogo(modifier = Modifier.fillMaxSize())
                         }
-                        Column {
+
+                        Column(
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "SMC Vodafone",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = (-0.3).sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                // Sleek live badge
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFF2E7D32).copy(alpha = 0.12f),
+                                    border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.3f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(5.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF2E7D32))
+                                        )
+                                        Text(
+                                            text = "LIVE",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp
+                                            ),
+                                            color = Color(0xFF2E7D32)
+                                        )
+                                    }
+                                }
+                            }
+
+                            val tabSubtitle = when (currentTab) {
+                                MainTab.DASHBOARD -> "Operations Dashboard"
+                                MainTab.TICKETS -> "PC Problems & Incidents"
+                                MainTab.REQUESTS -> "Enterprise Access Requests"
+                                MainTab.REMINDERS -> "Reminders & Alerts"
+                                MainTab.NOTES -> "Operational Handover Notes"
+                                MainTab.PROFILE -> "Settings & System Controls"
+                            }
                             Text(
-                                "SMC Vodafone",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-0.3).sp
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                "SMC Specialist",
+                                text = tabSubtitle,
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 0.2.sp
                                 ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 },
                 actions = {
-                    Box(
-                        modifier = Modifier
-                            .padding(end = 12.dp)
-                            .size(38.dp),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.padding(end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        UserInteractiveAvatar(
-                            viewModel = viewModel,
-                            size = 34.dp,
-                            showEditBadge = false,
-                            onClick = { currentTab = MainTab.PROFILE }
-                        )
+                        // 1. Dark/Light Mode Switcher
+                        IconButton(
+                            onClick = { viewModel.toggleDarkMode(!isDarkTheme) },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        ) {
+                            Icon(
+                                imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                contentDescription = "Toggle Theme",
+                                tint = if (isDarkTheme) Color(0xFFFBBF24) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // 2. Active Reminders quick trigger with badge
+                        IconButton(
+                            onClick = { currentTab = MainTab.REMINDERS },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (currentTab == MainTab.REMINDERS)
+                                        Color(0xFFE60000).copy(alpha = 0.12f)
+                                    else
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                )
+                        ) {
+                            BadgedBox(
+                                badge = {
+                                    if (uncompletedRemindersCount > 0) {
+                                        Badge(
+                                            containerColor = Color(0xFFE60000),
+                                            contentColor = Color.White
+                                        ) {
+                                            Text(
+                                                text = if (uncompletedRemindersCount > 99) "99+" else "$uncompletedRemindersCount",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
+                                    contentDescription = "Reminders",
+                                    tint = if (currentTab == MainTab.REMINDERS)
+                                        Color(0xFFE60000)
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        // 3. Settings Quick Shortcut
+                        IconButton(
+                            onClick = { currentTab = MainTab.PROFILE },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (currentTab == MainTab.PROFILE)
+                                        Color(0xFFE60000).copy(alpha = 0.12f)
+                                    else
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = if (currentTab == MainTab.PROFILE)
+                                    Color(0xFFE60000)
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -998,7 +1136,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     selected = currentTab == MainTab.DASHBOARD,
                     onClick = { currentTab = MainTab.DASHBOARD },
                     modifier = Modifier.testTag("tab_dashboard"),
-                    icon = { Icon(Icons.Default.Home, "Dashboard") },
+                    icon = { Icon(Icons.Default.Dashboard, "Dashboard") },
                     label = { 
                         Text(
                             text = "Dashboard",
@@ -1013,7 +1151,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     selected = currentTab == MainTab.TICKETS,
                     onClick = { currentTab = MainTab.TICKETS },
                     modifier = Modifier.testTag("tab_tickets"),
-                    icon = { Icon(Icons.Default.DesktopWindows, "Tickets") },
+                    icon = { Icon(Icons.Default.Computer, "PC Problems") },
                     label = { 
                         Text(
                             text = "PC Problems",
@@ -1028,7 +1166,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     selected = currentTab == MainTab.REQUESTS,
                     onClick = { currentTab = MainTab.REQUESTS },
                     modifier = Modifier.testTag("tab_requests"),
-                    icon = { Icon(Icons.Default.Send, "Requests") },
+                    icon = { Icon(Icons.Default.Assignment, "Requests") },
                     label = { 
                         Text(
                             text = "Requests",
@@ -1043,7 +1181,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     selected = currentTab == MainTab.REMINDERS,
                     onClick = { currentTab = MainTab.REMINDERS },
                     modifier = Modifier.testTag("tab_reminders"),
-                    icon = { Icon(Icons.Default.Notifications, "Reminders") },
+                    icon = { Icon(Icons.Default.Alarm, "Reminders") },
                     label = { 
                         Text(
                             text = "Reminders",
@@ -1058,7 +1196,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     selected = currentTab == MainTab.NOTES,
                     onClick = { currentTab = MainTab.NOTES },
                     modifier = Modifier.testTag("tab_notes"),
-                    icon = { Icon(Icons.Default.Edit, "Notes") },
+                    icon = { Icon(Icons.Default.Description, "Notes") },
                     label = { 
                         Text(
                             text = "Notes",
@@ -1073,7 +1211,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     selected = currentTab == MainTab.PROFILE,
                     onClick = { currentTab = MainTab.PROFILE },
                     modifier = Modifier.testTag("tab_profile"),
-                    icon = { Icon(Icons.Default.Settings, "Admin") },
+                    icon = { Icon(Icons.Default.AdminPanelSettings, "Admin") },
                     label = { 
                         Text(
                             text = "Admin",
@@ -1295,81 +1433,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
 // TAB 1: REPORTS DASHBOARD
 // ==========================================
 
-// ==========================================
-// FILE EXPORT ENGAGEMENT ENGINE (ACTUAL LOCAL GENERATION)
-// ==========================================
 
-fun exportFile(context: android.content.Context, type: String, content: String) {
-    try {
-        val extension = if (type.lowercase() == "pdf") "pdf" else "csv"
-        val mime = if (type.lowercase() == "pdf") "application/pdf" else "text/csv"
-        val fileName = "SMC_Operational_Report_${System.currentTimeMillis()}.$extension"
-        val file = java.io.File(context.cacheDir, fileName)
-        
-        if (type.lowercase() == "pdf") {
-            // Generate actual PDF document using android.graphics.pdf.PdfDocument
-            val pdfDocument = android.graphics.pdf.PdfDocument()
-            val paint = android.graphics.Paint().apply {
-                textSize = 9f
-                typeface = android.graphics.Typeface.MONOSPACE
-            }
-            
-            val lines = content.split("\n")
-            var pageNumber = 1
-            var yPosition = 40
-            
-            // PDF Page sizing (A4 is ~ 595 x 842 points)
-            var pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNumber).create()
-            var page = pdfDocument.startPage(pageInfo)
-            var canvas = page.canvas
-            
-            lines.forEach { line ->
-                if (yPosition > 800) {
-                    pdfDocument.finishPage(page)
-                    pageNumber++
-                    yPosition = 40
-                    pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNumber).create()
-                    page = pdfDocument.startPage(pageInfo)
-                    canvas = page.canvas
-                }
-                canvas.drawText(line, 30f, yPosition.toFloat(), paint)
-                yPosition += 16
-            }
-            pdfDocument.finishPage(page)
-            
-            val fos = java.io.FileOutputStream(file)
-            pdfDocument.writeTo(fos)
-            fos.close()
-            pdfDocument.close()
-        } else {
-            // Excel-compatible CSV file creation
-            val fos = java.io.FileOutputStream(file)
-            fos.write(content.toByteArray())
-            fos.close()
-        }
-        
-        // Share via Intent using FileProvider helper
-        val uri: android.net.Uri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-        
-        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-            this.type = mime
-            putExtra(android.content.Intent.EXTRA_SUBJECT, "SMC Operational Helpdesk Report")
-            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        val chooser = android.content.Intent.createChooser(intent, "Export $type Report")
-        chooser.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        context.startActivity(chooser)
-        android.widget.Toast.makeText(context, "$type export initialized successfully!", android.widget.Toast.LENGTH_SHORT).show()
-    } catch (e: Exception) {
-        e.printStackTrace()
-        android.widget.Toast.makeText(context, "Failed to generate file: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
-    }
-}
 
 @Composable
 fun DashboardTabScreen(
@@ -1389,98 +1453,6 @@ fun DashboardTabScreen(
     val vpnRequests by viewModel.rawVPNRequests.collectAsStateWithLifecycle(initialValue = emptyList())
     val reminders by viewModel.rawReminders.collectAsStateWithLifecycle(initialValue = emptyList())
 
-    val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
-    var exportedDataText by remember { mutableStateOf("") }
-    var showExportDialog by remember { mutableStateOf(false) }
-    var currentReportPerspective by remember { mutableStateOf("Site Analytics") }
-
-    fun performExport(type: String) {
-        val sb = java.lang.StringBuilder()
-        sb.append("=== SMC Operational Helpdesk Export - ${type.uppercase()} ===\n")
-        sb.append("Generated At: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date())}\n\n")
-        
-        sb.append("--- WORKSTATION INCIDENT TICKETS ---\n")
-        sb.append("Ticket ID,Incident Date,Site,Zone,PC Node,Category,Priority,Status\n")
-        pcProblems.forEach {
-            sb.append("${it.ticketNumber},${it.username},${it.site},${it.zone},${it.pcName},${it.category},${it.priority},${it.status}\n")
-        }
-        
-        sb.append("\n--- ITAR REQUESTS ---\n")
-        sb.append("Request ID,Employee,Type,Status,StartDate,EndDate\n")
-        itarRequests.forEach {
-            sb.append("${it.rId},${it.employeeName},${it.requestType},${it.status},${it.startDate},${it.endDate}\n")
-        }
-
-        sb.append("\n--- VPN ACCESS CHANNELS ---\n")
-        sb.append("SR#,Ticket Date,Username,VPN SR#,Status,Notes\n")
-        vpnRequests.forEach {
-            sb.append("${it.srNumber},${it.employeeName},${it.username},${it.vpnType},${it.status},${it.notes}\n")
-        }
-
-        sb.append("\n--- NT ACCOUNT DIRECTORY PROFILE REQUESTS ---\n")
-        sb.append("Request ID,Username,Action,Site,Status,Notes\n")
-        ntCreations.forEach {
-            sb.append("${it.reqId},${it.employeeName},${it.department},${it.site},${it.status},${it.notes}\n")
-        }
-
-        sb.append("\n--- REMINDERS QUEUE ---\n")
-        sb.append("Title,Description,Priority,Status,Due\n")
-        reminders.forEach {
-            sb.append("${it.title},${it.description},${it.priority},${it.status},${it.dueDate}\n")
-        }
-
-        val exportStr = sb.toString()
-        exportedDataText = exportStr
-        clipboardManager.setText(AnnotatedString(exportStr))
-        showExportDialog = true
-        
-        exportFile(context, type, exportStr)
-    }
-
-    if (showExportDialog) {
-        AlertDialog(
-            onDismissRequest = { showExportDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.Share, "Export", tint = Color(0xFFE60000))
-                    Text("Export Confirmed", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("All operational databases unified and updated. Output has been created and copied to clipboard!", style = MaterialTheme.typography.bodyMedium)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
-                            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                            .padding(8.dp)
-                    ) {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            item {
-                                Text(
-                                    text = exportedDataText,
-                                    style = androidx.compose.ui.text.TextStyle(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp
-                                    ),
-                                    color = Color(0xFF334155)
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showExportDialog = false }) {
-                    Text("Close", color = Color(0xFFE60000), fontWeight = FontWeight.Bold)
-                }
-            }
-        )
-    }
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1492,7 +1464,7 @@ fun DashboardTabScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    "System Reports",
+                    "Operations Dashboard",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1610,37 +1582,6 @@ fun DashboardTabScreen(
             }
         }
 
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        performExport("pdf")
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.Share, "Share PDF", modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Export PDF", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                OutlinedButton(
-                    onClick = {
-                        performExport("excel")
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                ) {
-                    Icon(Icons.Default.Send, "Send Excel", modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Export Excel", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
 
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1802,12 +1743,12 @@ fun DashboardTabScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     val quickActions = listOf(
-                        Triple("PC Problem", Icons.Default.Warning, onCreateTicket),
-                        Triple("ITAR Access", Icons.Default.CheckCircle, onCreateITAR),
-                        Triple("VPN Setup", Icons.Default.Lock, onCreateVPN),
-                        Triple("New Note", Icons.Default.Add, onCreateNote),
-                        Triple("NT Account", Icons.Default.Person, onCreateNT),
-                        Triple("Reminder", Icons.Default.Notifications, onCreateReminder)
+                        Triple("PC Problem", Icons.Default.Computer, onCreateTicket),
+                        Triple("ITAR Access", Icons.Default.VerifiedUser, onCreateITAR),
+                        Triple("VPN Setup", Icons.Default.VpnLock, onCreateVPN),
+                        Triple("New Note", Icons.Default.NoteAdd, onCreateNote),
+                        Triple("NT Account", Icons.Default.PersonAdd, onCreateNT),
+                        Triple("Reminder", Icons.Default.AlarmAdd, onCreateReminder)
                     )
                     
                     quickActions.forEach { (label, icon, onClick) ->
@@ -1929,14 +1870,7 @@ fun TicketsTabScreen(
     onCreateTicketRequested: () -> Unit
 ) {
     val searchVal by viewModel.pcProblemsSearchTerm.collectAsStateWithLifecycle()
-    val filterVal by viewModel.pcProblemsFilter.collectAsStateWithLifecycle()
     val ticketsList by viewModel.filteredPCProblems.collectAsStateWithLifecycle(initialValue = emptyList())
-
-    val sortBy by viewModel.pcProblemsSortBy.collectAsStateWithLifecycle()
-    val teamFilter by viewModel.pcProblemsTeamFilter.collectAsStateWithLifecycle()
-    val statusFilter by viewModel.pcProblemsStatusFilter.collectAsStateWithLifecycle()
-
-    var isFilterMenuExpanded by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -1959,192 +1893,31 @@ fun TicketsTabScreen(
                     modifier = Modifier
                         .testTag("search_tickets")
                         .fillMaxWidth(),
-                    placeholder = { Text("Search incident description or ID...") },
+                    placeholder = { Text("Search incident description, user, or ID...") },
                     leadingIcon = { Icon(Icons.Default.Search, "Search Icon") },
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(10.dp)
                 )
             }
 
             item {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val chips = listOf("All", "Active", "Critical", "Resolved")
-                    chips.forEach { chip ->
-                        val isSelected = filterVal == chip
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { viewModel.pcProblemsFilter.value = chip },
-                            label = { Text(chip, style = MaterialTheme.typography.labelLarge) }
-                        )
-                    }
-                }
-            }
-
-            // 🛠️ SORT & ADVANCED FILTER CARD
-            item {
-                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFF8FAFC)
-                    ),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { isFilterMenuExpanded = !isFilterMenuExpanded }
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FilterList,
-                                    contentDescription = "Filters & Sorting",
-                                    tint = Color(0xFFE60000),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    text = "Sort & Advanced Filters",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF0F172A)
-                                )
-                            }
-
-                            Icon(
-                                imageVector = if (isFilterMenuExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Toggle Expand",
-                                tint = Color(0xFF475569)
-                            )
-                        }
-
-                        AnimatedVisibility(visible = isFilterMenuExpanded) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                HorizontalDivider(color = Color(0xFFE2E8F0))
-
-                                // 1. Sort By Controls
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(
-                                        text = "SORT BY",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                                        color = Color(0xFF64748B)
-                                    )
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .horizontalScroll(rememberScrollState()),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        val sortOptions = listOf(
-                                            "creation_date_desc" to "Newest First",
-                                            "creation_date_asc" to "Oldest First",
-                                            "status" to "By Status",
-                                            "assigned_team" to "By Team"
-                                        )
-                                        sortOptions.forEach { (optionVal, optionLabel) ->
-                                            val isSelected = sortBy == optionVal
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(if (isSelected) Color(0xFFE60000) else Color(0xFFE2E8F0).copy(alpha = 0.4f))
-                                                    .border(1.dp, if (isSelected) Color(0xFFE60000) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                                                    .clickable { viewModel.pcProblemsSortBy.value = optionVal }
-                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                            ) {
-                                                Text(
-                                                    text = optionLabel,
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = if (isSelected) Color.White else Color(0xFF334155)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // 2. Status Filter Controls
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(
-                                        text = "FILTER STATUS",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                                        color = Color(0xFF64748B)
-                                    )
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .horizontalScroll(rememberScrollState()),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        val statusOptions = listOf("All", "Open", "In Progress", "Pending User", "Closed")
-                                        statusOptions.forEach { statusVal ->
-                                            val isSelected = statusFilter == statusVal
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(if (isSelected) Color(0xFFE60000) else Color(0xFFE2E8F0).copy(alpha = 0.4f))
-                                                    .border(1.dp, if (isSelected) Color(0xFFE60000) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                                                    .clickable { viewModel.pcProblemsStatusFilter.value = statusVal }
-                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                            ) {
-                                                Text(
-                                                    text = statusVal,
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = if (isSelected) Color.White else Color(0xFF334155)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // 3. Team Filter Controls
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(
-                                        text = "FILTER TEAM",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                                        color = Color(0xFF64748B)
-                                    )
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .horizontalScroll(rememberScrollState()),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        val teamOptions = listOf("All", "Help Desk", "Admin Team", "Network Team", "Operation Team")
-                                        teamOptions.forEach { teamVal ->
-                                            val isSelected = teamFilter == teamVal
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(if (isSelected) Color(0xFFE60000) else Color(0xFFE2E8F0).copy(alpha = 0.4f))
-                                                    .border(1.dp, if (isSelected) Color(0xFFE60000) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                                                    .clickable { viewModel.pcProblemsTeamFilter.value = teamVal }
-                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                            ) {
-                                                Text(
-                                                    text = teamVal,
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = if (isSelected) Color.White else Color(0xFF334155)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    Text(
+                        "ALL INCIDENTS",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        ),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "${ticketsList.size} TOTAL",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -3101,7 +2874,6 @@ fun RemindersTabScreen(
     viewModel: MainViewModel,
     onCreateReminder: () -> Unit
 ) {
-    var activeSubTab by remember { mutableStateOf("Active") } // Active, Escalated, Done, Tasks
     var sortBy by remember { mutableStateOf("Upcoming First") } // Upcoming First, Distant First, Newest Created, Oldest Created
     val remindersList by viewModel.rawReminders.collectAsStateWithLifecycle(initialValue = emptyList())
     val tasksList by viewModel.rawITTasks.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -3125,21 +2897,12 @@ fun RemindersTabScreen(
         consolidateReminders(remindersList)
     }
 
-    val filteredReminders = consolidatedList.filter {
-        when (activeSubTab) {
-            "Active" -> it.status == "Active"
-            "Escalated" -> it.status == "Escalated"
-            "Done" -> it.status == "Done"
-            else -> true
-        }
-    }
-
     // Filter reminders additionally by selected calendar date if active
-    val calendarFilteredReminders = remember(filteredReminders, selectedCalendarDay) {
+    val calendarFilteredReminders = remember(consolidatedList, selectedCalendarDay) {
         if (selectedCalendarDay == null) {
-            filteredReminders
+            consolidatedList
         } else {
-            filteredReminders.filter {
+            consolidatedList.filter {
                 if (it.dueDate.startsWith("TimerTarget:")) {
                     val targetTime = it.dueDate.substringAfter("TimerTarget:").toLongOrNull() ?: 0L
                     val rCal = java.util.Calendar.getInstance().apply { timeInMillis = targetTime }
@@ -3325,8 +3088,8 @@ fun RemindersTabScreen(
                         shape = RoundedCornerShape(12.dp)
                     )
                     
-                    // Done sub-tab bulk action prune button
-                    if (activeSubTab == "Done" && consolidatedList.any { it.status == "Done" }) {
+                    // Done bulk action prune button
+                    if (consolidatedList.any { it.status == "Done" }) {
                         val context = LocalContext.current
                         Button(
                             onClick = {
@@ -3340,27 +3103,8 @@ fun RemindersTabScreen(
                         ) {
                             Icon(Icons.Default.Delete, "Clear Done", modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Prune", style = MaterialTheme.typography.labelSmall)
+                            Text("Clear Done", style = MaterialTheme.typography.labelSmall)
                         }
-                    }
-                }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val subTabs = listOf("Active", "Escalated", "Done")
-                    subTabs.forEach { tabName ->
-                        val isSelected = activeSubTab == tabName
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { activeSubTab = tabName },
-                            label = { Text(tabName, style = MaterialTheme.typography.labelLarge) }
-                        )
                     }
                 }
             }
@@ -3369,12 +3113,14 @@ fun RemindersTabScreen(
                 item {
                     val customDesc = if (selectedCalendarDay != null) {
                         val df = java.text.SimpleDateFormat("EEE, MMM d, yyyy", java.util.Locale.getDefault())
-                        "No alarms or SLA requirements scheduled on " + df.format(selectedCalendarDay!!.time) + " in $activeSubTab queue."
+                        "No alarms or SLA requirements scheduled on " + df.format(selectedCalendarDay!!.time) + "."
+                    } else if (searchQuery.isNotBlank()) {
+                        "No reminders matching '$searchQuery'."
                     } else {
                         "Alert alarms matching your IT service actions will appear here."
                     }
                     EmptyStatePlaceholder(
-                         title = "No reminders in $activeSubTab queue",
+                         title = "No reminders found",
                          desc = customDesc
                     )
                 }
@@ -3962,13 +3708,13 @@ fun ReminderCard(reminder: Reminder, viewModel: MainViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.VolumeUp,
-                        contentDescription = "Sound Configuration",
+                        imageVector = Icons.Default.NotificationsActive,
+                        contentDescription = "Standard System Notification",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
-                        text = "Alarm Sound: ${reminder.soundType.ifBlank { "Default" }}",
+                        text = "Alert: System Default Notification",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -4003,11 +3749,7 @@ fun ReminderCard(reminder: Reminder, viewModel: MainViewModel) {
                                     AlertSoundTester.stopSound()
                                     isSoundPlaying = false
                                 } else {
-                                    AlertSoundTester.playSound(
-                                        context,
-                                        reminder.soundType.ifBlank { "Default" },
-                                        "Testing alarm sound: ${reminder.title}"
-                                    )
+                                    AlertSoundTester.playSound(context)
                                     isSoundPlaying = true
                                 }
                             }
@@ -4893,7 +4635,6 @@ fun ProfileAdminTabScreen(viewModel: MainViewModel) {
     val logs by viewModel.filteredAuditLogs.collectAsStateWithLifecycle(initialValue = emptyList())
     val currentRole by viewModel.currentUserRole.collectAsStateWithLifecycle()
     val searchVal by viewModel.auditSearchTerm.collectAsStateWithLifecycle()
-    val filterVal by viewModel.auditFilter.collectAsStateWithLifecycle()
 
     val optMaintenance by viewModel.maintenanceMode.collectAsStateWithLifecycle()
     val optBackupFreq by viewModel.backupFrequency.collectAsStateWithLifecycle()
@@ -6070,28 +5811,9 @@ fun ProfileAdminTabScreen(viewModel: MainViewModel) {
                 onValueChange = { viewModel.auditSearchTerm.value = it },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
-                placeholder = { Text("Filter email or action class...") },
-                leadingIcon = { Icon(Icons.Default.Search, "Filter") }
+                placeholder = { Text("Search by email, action, or details...") },
+                leadingIcon = { Icon(Icons.Default.Search, "Search") }
             )
-        }
-
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val chips = listOf("All Entities")
-                chips.forEach { chipName ->
-                    val isSelected = filterVal == chipName
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.auditFilter.value = chipName },
-                        label = { Text(chipName, style = MaterialTheme.typography.labelSmall) }
-                    )
-                }
-            }
         }
 
         if (logs.isEmpty()) {

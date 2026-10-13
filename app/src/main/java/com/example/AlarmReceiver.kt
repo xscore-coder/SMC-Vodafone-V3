@@ -7,14 +7,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
-import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
-import android.os.Vibrator
-import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.vodafone.smc.R
 import com.vodafone.smc.data.AppDatabase
 import com.vodafone.smc.data.Reminder
 import kotlinx.coroutines.CoroutineScope
@@ -22,8 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import java.util.Locale
 
+/**
+ * BroadcastReceiver responsible exclusively for scheduling and dispatching standard
+ * system notifications using the OS default notification sound and channel settings.
+ */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val goAsync = goAsync()
@@ -37,43 +36,28 @@ class AlarmReceiver : BroadcastReceiver() {
                     val reminder = allReminders.find { it.id == reminderId }
                     
                     if (reminder != null && (reminder.status == "Active" || reminder.status == "Escalated")) {
-                        // Check if current hour falls within the allowed daily range (e.g. 7:00 AM to 7:00 PM)
+                        // Check if current hour falls within the allowed daily range
                         val calendar = Calendar.getInstance()
-                        val currentHour = calendar.get(Calendar.HOUR_OF_DAY) // 0-23
+                        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
                         
                         var isInTimeWindow = false
                         if (reminder.startHour <= reminder.endHour) {
                             isInTimeWindow = currentHour >= reminder.startHour && currentHour <= reminder.endHour
                         } else {
-                            // Midnight wraparound (e.g. 20 PM to 6 AM)
                             isInTimeWindow = currentHour >= reminder.startHour || currentHour <= reminder.endHour
                         }
                         
                         if (isInTimeWindow) {
-                            if (reminder.notificationEnabled) {
-                                triggerNotification(context, reminder)
-                            }
-                            playAlarmSound(context, reminder.soundType, reminder.title)
-                            vibrateDevice(context, reminder.vibrationEnabled)
-                            
-                            try {
-                                val alertIntent = Intent(context, AlarmAlertActivity::class.java).apply {
-                                    putExtra("reminder_id", reminder.id)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                                }
-                                context.startActivity(alertIntent)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+                            // Exclusively rely on standard Android notification mechanism with default sound
+                            triggerNotification(context, reminder)
                         } else {
-                            Log.d("AlarmReceiver", "Alarm for Reminder ID ${reminder.id} suppressed because current hour ($currentHour) is outside allowed window ($reminder.startHour to $reminder.endHour)")
+                            Log.d("AlarmReceiver", "Notification for Reminder ID ${reminder.id} suppressed because hour ($currentHour) is outside window (${reminder.startHour} to ${reminder.endHour})")
                         }
                         
-                        // Reschedule alarm for next interval if reminder is still active
+                        // Reschedule for next interval if still active
                         val intervalMin = reminder.repeatIntervalMin.coerceAtLeast(1)
                         var nextTriggerMs = System.currentTimeMillis() + (intervalMin * 60 * 1000L)
                         
-                        // Ensure the timer strictly works from startHour and ends fully in endHour
                         val calendarNext = Calendar.getInstance()
                         calendarNext.timeInMillis = nextTriggerMs
                         val nextHour = calendarNext.get(Calendar.HOUR_OF_DAY)
@@ -107,7 +91,6 @@ class AlarmReceiver : BroadcastReceiver() {
                         
                         val updatedReminder = reminder.copy(dueDate = "TimerTarget:$nextTriggerMs")
                         dao.insertReminder(updatedReminder)
-                        
                         AlarmScheduler.scheduleAlarm(context.applicationContext, updatedReminder)
                     }
                 }
@@ -120,16 +103,25 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     private fun triggerNotification(context: Context, reminder: Reminder) {
-        val channelId = "smc_reminders_channel"
+        val channelId = "smc_default_alerts_channel"
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .build()
+
             val channel = NotificationChannel(
                 channelId,
-                "SMC Reminders",
+                "SMC Alerts & Reminders",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Channel for SMC operational alarm reminders"
+                description = "Standard system notifications for SMC alerts and operational reminders"
+                enableLights(true)
+                enableVibration(true)
+                setSound(defaultSoundUri, audioAttributes)
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -145,50 +137,17 @@ class AlarmReceiver : BroadcastReceiver() {
         val contentPendingIntent = PendingIntent.getActivity(context, reminder.id, mainIntent, pendingFlags)
 
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(com.vodafone.smc.R.drawable.ic_no_sim)
-            .setContentTitle("🚨 SLA Reminders: ${reminder.title}")
+            .setSmallIcon(R.drawable.ic_no_sim)
+            .setContentTitle("SMC Alert: ${reminder.title}")
             .setContentText(reminder.description)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSound(defaultSoundUri)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
             
         try {
             notificationManager.notify(reminder.id, builder.build())
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun playAlarmSound(context: Context, soundType: String, reminderTitle: String? = null) {
-        try {
-            val prefs = context.getSharedPreferences("smc_pref", Context.MODE_PRIVATE)
-            val customizedSound = prefs.getString("reminder_sound", "Default") ?: "Default"
-            AlertSoundTester.playSound(context, customizedSound, reminderTitle ?: "SLA Alarm triggered")
-        } catch (e: Exception) {
-            e.printStackTrace()
-            try {
-                val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                val r = RingtoneManager.getRingtone(context, notificationUri)
-                r?.play()
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
-    }
-
-    private fun vibrateDevice(context: Context, vibrationEnabled: Boolean) {
-        if (!vibrationEnabled) return
-        try {
-            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            if (vibrator != null && vibrator.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator.vibrate(android.os.VibrationEffect.createOneShot(800, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator.vibrate(800)
-                }
-            }
         } catch (e: Exception) {
             e.printStackTrace()
         }

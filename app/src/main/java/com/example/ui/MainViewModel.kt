@@ -10,7 +10,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.vodafone.smc.AlarmScheduler
-import com.vodafone.smc.AlertSoundTester
 import com.vodafone.smc.data.AppDatabase
 import com.vodafone.smc.data.AppRepository
 import com.vodafone.smc.data.AuditLog
@@ -199,116 +198,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = emptyList()
     )
 
-    // State Flows compiled with user search criteria
+    // State Flows compiled with user search criteria (Filters removed across project)
     val filteredPCProblems: StateFlow<List<PCProblem>> = combine(
-        combine(rawPCProblems, pcProblemsSearchTerm, pcProblemsFilter) { list, s, f -> Triple(list, s, f) },
-        combine(pcProblemsSortBy, pcProblemsTeamFilter, pcProblemsStatusFilter) { sb, tf, sf -> Triple(sb, tf, sf) }
-    ) { first, second ->
-        val list = first.first
-        val search = first.second
-        val filter = first.third
-        val sortBy = second.first
-        val teamFilter = second.second
-        val statusFilter = second.third
-
-        var result = list.filter {
-            val matchesSearch = it.employeeName.contains(search, ignoreCase = true) ||
-                    it.username.contains(search, ignoreCase = true) ||
-                    it.detailedSummary.contains(search, ignoreCase = true) ||
-                    it.pcName.contains(search, ignoreCase = true) ||
-                    it.ticketNumber.contains(search, ignoreCase = true)
-
-            val matchesFilter = when (filter) {
-                "Active" -> it.status != "Closed"
-                "Critical" -> it.priority == "Critical"
-                "Resolved" -> it.status == "Closed"
-                else -> true
+        rawPCProblems, pcProblemsSearchTerm
+    ) { list, search ->
+        val result = if (search.isBlank()) {
+            list
+        } else {
+            list.filter {
+                it.employeeName.contains(search, ignoreCase = true) ||
+                        it.username.contains(search, ignoreCase = true) ||
+                        it.detailedSummary.contains(search, ignoreCase = true) ||
+                        it.pcName.contains(search, ignoreCase = true) ||
+                        it.ticketNumber.contains(search, ignoreCase = true)
             }
-
-            val matchesStatusFilter = when (statusFilter) {
-                "All" -> true
-                else -> it.status.equals(statusFilter, ignoreCase = true)
-            }
-
-            val matchesTeamFilter = when (teamFilter) {
-                "All" -> true
-                else -> it.assignedTeam.equals(teamFilter, ignoreCase = true)
-            }
-
-            matchesSearch && matchesFilter && matchesStatusFilter && matchesTeamFilter
         }
-
-        // Sort by chosen criteria
-        result = when (sortBy) {
-            "creation_date_asc" -> result.sortedBy { it.createdAt }
-            "status" -> result.sortedWith(compareBy({ it.status }, { -it.createdAt }))
-            "assigned_team" -> result.sortedBy { it.assignedTeam }
-            else -> result.sortedByDescending { it.createdAt } // "creation_date_desc" (newest first)
-        }
-
-        result
+        result.sortedByDescending { it.createdAt }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredITARRequests: StateFlow<List<ITARRequest>> = combine(
-        rawITARRequests, itarSearchTerm, itarFilter
-    ) { list, search, filter ->
-        list.filter {
-            val matchesSearch = it.employeeName.contains(search, ignoreCase = true) ||
-                    it.username.contains(search, ignoreCase = true) ||
-                    it.rId.contains(search, ignoreCase = true) ||
-                    it.requestType.contains(search, ignoreCase = true)
-
-            val matchesFilter = when (filter) {
-                "Pending" -> it.status == "Pending"
-                "Approved" -> it.status == "Approved"
-                "Review Needed" -> it.status == "Review Needed"
-                else -> true
+        rawITARRequests, itarSearchTerm
+    ) { list, search ->
+        if (search.isBlank()) list else {
+            list.filter {
+                it.employeeName.contains(search, ignoreCase = true) ||
+                        it.username.contains(search, ignoreCase = true) ||
+                        it.rId.contains(search, ignoreCase = true) ||
+                        it.requestType.contains(search, ignoreCase = true)
             }
-
-            matchesSearch && matchesFilter
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredVPNRequests: StateFlow<List<VPNRequest>> = combine(
-        rawVPNRequests, vpnSearchTerm, vpnFilter
-    ) { list, search, filter ->
-        list.filter {
-            val matchesSearch = it.employeeName.contains(search, ignoreCase = true) ||
-                    it.username.contains(search, ignoreCase = true) ||
-                    it.vpnType.contains(search, ignoreCase = true) ||
-                    it.srNumber.contains(search, ignoreCase = true)
-
-            val matchesFilter = when (filter) {
-                "Pending" -> it.status == "Pending" || it.status == "In Review"
-                "Approved" -> it.status == "Approved" || it.status == "Completed"
-                "Rejected" -> it.status == "Rejected"
-                else -> true
+        rawVPNRequests, vpnSearchTerm
+    ) { list, search ->
+        if (search.isBlank()) list else {
+            list.filter {
+                it.employeeName.contains(search, ignoreCase = true) ||
+                        it.username.contains(search, ignoreCase = true) ||
+                        it.vpnType.contains(search, ignoreCase = true) ||
+                        it.srNumber.contains(search, ignoreCase = true)
             }
-            matchesSearch && matchesFilter
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredNTCreations: StateFlow<List<NTCreation>> = combine(
         rawNTCreations, ntSearchTerm
     ) { list, search ->
-        list.filter {
-            it.employeeName.contains(search, ignoreCase = true) ||
-                    it.employeeId.contains(search, ignoreCase = true) ||
-                    it.site.contains(search, ignoreCase = true) ||
-                    it.department.contains(search, ignoreCase = true)
+        if (search.isBlank()) list else {
+            list.filter {
+                it.employeeName.contains(search, ignoreCase = true) ||
+                        it.employeeId.contains(search, ignoreCase = true) ||
+                        it.site.contains(search, ignoreCase = true) ||
+                        it.department.contains(search, ignoreCase = true)
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredAuditLogs: StateFlow<List<AuditLog>> = combine(
-        rawAuditLogs, auditSearchTerm, auditFilter
-    ) { list, search, filter ->
-        list.filter {
-            val matchesSearch = it.actorEmail.contains(search, ignoreCase = true) ||
-                    it.actionType.contains(search, ignoreCase = true) ||
-                    it.details.contains(search, ignoreCase = true)
-
-            val matchesFilter = if (filter == "All Entities") true else it.actionType == filter
-            matchesSearch && matchesFilter
+        rawAuditLogs, auditSearchTerm
+    ) { list, search ->
+        if (search.isBlank()) list else {
+            list.filter {
+                it.actorEmail.contains(search, ignoreCase = true) ||
+                        it.actionType.contains(search, ignoreCase = true) ||
+                        it.details.contains(search, ignoreCase = true)
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -898,31 +853,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playSystemAlarmSound() {
         try {
             val context = getApplication<Application>()
-            val selectedSound = alertSound.value
-            AlertSoundTester.playSound(context, selectedSound, "Emergency SMC Alert Triggered")
+            val notificationUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            val r = android.media.RingtoneManager.getRingtone(context, notificationUri)
+            r?.play()
         } catch (e: Exception) {
             e.printStackTrace()
-            try {
-                val toneG = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80)
-                toneG.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 350)
-            } catch (ex: Exception) {}
         }
     }
 
     private fun displayNotification(title: String, message: String) {
         val context = getApplication<Application>()
-        val channelId = "smc_reminders_channel"
+        val channelId = "smc_default_alerts_channel"
         val notificationId = System.currentTimeMillis().toInt()
+        val defaultSoundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
         
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val audioAttributes = android.media.AudioAttributes.Builder()
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                .build()
+
             val channel = NotificationChannel(
                 channelId,
-                "SMC Reminders",
+                "SMC Alerts & Reminders",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Channel for SMC operational alarm reminders"
+                description = "Standard system notifications for SMC alerts and operational reminders"
+                enableLights(true)
+                enableVibration(true)
+                setSound(defaultSoundUri, audioAttributes)
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -932,19 +893,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSound(defaultSoundUri)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
             .setAutoCancel(true)
             
         try {
             notificationManager.notify(notificationId, builder.build())
-            // Play user's customized notification sound!
-            val selectedSound = notificationSound.value
-            AlertSoundTester.playSound(context, selectedSound, message)
         } catch (e: Exception) {
             e.printStackTrace()
-            try {
-                val toneG = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 80)
-                toneG.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 150)
-            } catch (ex: Exception) {}
         }
     }
 
