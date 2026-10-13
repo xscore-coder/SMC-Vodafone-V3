@@ -351,8 +351,6 @@ abstract class AppDatabase : RoomDatabase() {
         suspend fun populateInitialData(dao: AppDao) {
             // Populate Initial System Setup Log
             dao.insertAuditLog(AuditLog(actorEmail = "SMC Operator", actionType = "Startup", details = "SMC Specialist instance successfully initialized with empty databases."))
-            // Populate default admin user
-            dao.insertUser(User(username = "v22aali168", passwordHash = "Voda@2002", role = "Admin"))
         }
     }
 }

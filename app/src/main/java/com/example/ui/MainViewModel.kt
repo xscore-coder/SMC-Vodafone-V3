@@ -37,50 +37,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("smc_pref", Context.MODE_PRIVATE)
     private val repository: AppRepository
 
-    // Logged in States
-    private val _isLoggedIn = MutableStateFlow(prefs.getBoolean("is_logged_in", false))
-    val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
+    // User / Profile state (No login required - full Admin access by default)
+    val loggedInUsername: StateFlow<String> = MutableStateFlow("Admin").asStateFlow()
+    val currentUserRole: StateFlow<String> = MutableStateFlow("Admin").asStateFlow()
 
-    private val _loggedInUsername = MutableStateFlow(prefs.getString("logged_in_username", "") ?: "")
-    val loggedInUsername: StateFlow<String> = _loggedInUsername.asStateFlow()
-
-    private val _currentUserRole = MutableStateFlow(prefs.getString("logged_in_user_role", "Viewer") ?: "Viewer")
-    val currentUserRole: StateFlow<String> = _currentUserRole.asStateFlow()
-
-    private val _currentUserAvatar = MutableStateFlow(prefs.getString("avatar_${prefs.getString("logged_in_username", "") ?: ""}", "letters") ?: "letters")
+    private val _currentUserAvatar = MutableStateFlow(prefs.getString("user_avatar", "letters") ?: "letters")
     val currentUserAvatar: StateFlow<String> = _currentUserAvatar.asStateFlow()
 
-    private fun getCurrentAvatarFromPrefs(username: String): String {
-        if (username.isBlank()) return "letters"
-        return prefs.getString("avatar_$username", "letters") ?: "letters"
-    }
-
     fun updateLoggedInUserAvatar(newAvatar: String) {
-        val currentUsername = _loggedInUsername.value
-        if (currentUsername.isNotBlank()) {
-            prefs.edit().putString("avatar_$currentUsername", newAvatar).apply()
-            _currentUserAvatar.value = newAvatar
-            logAction("Profile Update", "Updated user avatar profile photo configuration to: $newAvatar")
-        }
+        prefs.edit().putString("user_avatar", newAvatar).apply()
+        _currentUserAvatar.value = newAvatar
+        logAction("Profile Update", "Updated avatar profile configuration to: $newAvatar")
     }
-
-    val rawUsers: Flow<List<User>> by lazy { repository.allUsers }
 
     init {
         val database = AppDatabase.getDatabase(application, viewModelScope)
         repository = AppRepository(database.appDao())
-        
-        // Dynamic safeguard to ensure default Admin user exists in DB
-        viewModelScope.launch {
-            try {
-                val admin = repository.getUserByUsername("v22aali168")
-                if (admin == null) {
-                    repository.insertUser(User(username = "v22aali168", passwordHash = "Voda@2002", role = "Admin"))
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
 
         // Start perpetual checking for unfinished SLA alerts
         viewModelScope.launch {
@@ -89,166 +61,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 checkAndSyncAutomaticHourlyReminders()
                 kotlinx.coroutines.delay(12000) // check every 12 seconds
             }
-        }
-    }
-
-    fun updateRole(newRole: String) {
-        _currentUserRole.value = newRole
-        prefs.edit().putString("logged_in_user_role", newRole).apply()
-        logAction("User Switch", "Switched current application view scope to $newRole")
-    }
-
-    fun authenticateUser(usernameInput: String, passwordInput: String, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            val user = repository.getUserByUsername(usernameInput.trim())
-            if (user != null && user.passwordHash == passwordInput) {
-                _isLoggedIn.value = true
-                _loggedInUsername.value = user.username
-                _currentUserRole.value = user.role
-                _currentUserAvatar.value = getCurrentAvatarFromPrefs(user.username)
-                
-                prefs.edit().apply {
-                    putBoolean("is_logged_in", true)
-                    putString("logged_in_username", user.username)
-                    putString("logged_in_user_role", user.role)
-                }.apply()
-                
-                logAction("Login", "Successfully logged in as ${user.username} with role ${user.role}")
-                onResult(true, "Successfully authenticated.")
-            } else {
-                logAction("Fail Login", "Attempted login failed for username: $usernameInput")
-                onResult(false, "Invalid username or password.")
-            }
-        }
-    }
-
-    fun logoutUser() {
-        viewModelScope.launch {
-            val prevUser = _loggedInUsername.value
-            _isLoggedIn.value = false
-            _loggedInUsername.value = ""
-            _currentUserRole.value = "Viewer"
-            _currentUserAvatar.value = "letters"
-            
-            prefs.edit().apply {
-                putBoolean("is_logged_in", false)
-                putString("logged_in_username", "")
-                putString("logged_in_user_role", "Viewer")
-            }.apply()
-            
-            logAction("Logout", "User $prevUser requested logout.")
-        }
-    }
-
-    fun getRememberMe(): Boolean {
-        return prefs.getBoolean("remember_me", false)
-    }
-
-    fun getRememberedUsername(): String {
-        return prefs.getString("remembered_username", "") ?: ""
-    }
-
-    fun setRememberMe(enabled: Boolean, username: String) {
-        prefs.edit().apply {
-            putBoolean("remember_me", enabled)
-            if (enabled) {
-                putString("remembered_username", username)
-            } else {
-                putString("remembered_username", "")
-            }
-        }.apply()
-    }
-
-    suspend fun isUsernameRegistered(username: String): Boolean {
-        if (username.trim().isBlank()) return false
-        return repository.getUserByUsername(username.trim()) != null
-    }
-
-    fun authenticateUserBiometric(usernameInput: String, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            val user = repository.getUserByUsername(usernameInput.trim())
-            if (user != null) {
-                _isLoggedIn.value = true
-                _loggedInUsername.value = user.username
-                _currentUserRole.value = user.role
-                _currentUserAvatar.value = getCurrentAvatarFromPrefs(user.username)
-                
-                prefs.edit().apply {
-                    putBoolean("is_logged_in", true)
-                    putString("logged_in_username", user.username)
-                    putString("logged_in_user_role", user.role)
-                }.apply()
-                
-                logAction("Biometric Login", "Successfully logged in via Biometric Auth as ${user.username} with role ${user.role}")
-                onResult(true, "Successfully authenticated.")
-            } else {
-                onResult(false, "User does not exist in local SMC cluster database.")
-            }
-        }
-    }
-
-    fun addNewLoginUser(usernameInput: String, passwordInput: String, roleInput: String, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            val cleanUser = usernameInput.trim()
-            if (cleanUser.isBlank() || passwordInput.isBlank()) {
-                onResult(false, "Username and password cannot be empty.")
-                return@launch
-            }
-            val existing = repository.getUserByUsername(cleanUser)
-            if (existing != null) {
-                onResult(false, "Username already exists.")
-                return@launch
-            }
-            val newUser = User(username = cleanUser, passwordHash = passwordInput, role = roleInput)
-            repository.insertUser(newUser)
-            logAction("Create User", "Created new login user '$cleanUser' with role '$roleInput'")
-            onResult(true, "User created successfully.")
-        }
-    }
-
-    fun updateLoginUser(userId: Int, usernameInput: String, passwordInput: String, roleInput: String, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            val cleanUser = usernameInput.trim()
-            if (cleanUser.isBlank() || passwordInput.isBlank()) {
-                onResult(false, "Username and password cannot be empty.")
-                return@launch
-            }
-            // Double check if username is admin v22aali168
-            if (cleanUser != "v22aali168") {
-                val searchForAdminObj = repository.getUserByUsername("v22aali168")
-                if (searchForAdminObj != null && searchForAdminObj.id == userId) {
-                    onResult(false, "The original admin username 'v22aali168' cannot be modified.")
-                    return@launch
-                }
-            }
-            
-            val updatedUser = User(id = userId, username = cleanUser, passwordHash = passwordInput, role = roleInput)
-            repository.insertUser(updatedUser)
-            
-            // If current user updated their own role or username, update session values
-            if (_loggedInUsername.value == cleanUser) {
-                _currentUserRole.value = roleInput
-                prefs.edit().putString("logged_in_user_role", roleInput).apply()
-            }
-            
-            logAction("Update User", "Updated user details for '$cleanUser' ($roleInput)")
-            onResult(true, "User updated successfully.")
-        }
-    }
-
-    fun deleteLoginUser(userId: Int, usernameToDelete: String, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            if (usernameToDelete == "v22aali168") {
-                onResult(false, "The primary admin account is locked and cannot be deleted.")
-                return@launch
-            }
-            if (_loggedInUsername.value == usernameToDelete) {
-                onResult(false, "You cannot delete your own active session account.")
-                return@launch
-            }
-            repository.deleteUser(userId)
-            logAction("Delete User", "Deleted login user '$usernameToDelete'")
-            onResult(true, "User deleted successfully.")
         }
     }
 
@@ -369,7 +181,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val ntSearchTerm = MutableStateFlow("")
     val auditSearchTerm = MutableStateFlow("")
-    val auditFilter = MutableStateFlow("All Entities") // All Entities, Action: Login, Action: Logout, Entity: Asset
+    val auditFilter = MutableStateFlow("All Entities")
 
     // Raw Room flows
     val rawPCProblems = repository.allPCProblems
@@ -495,10 +307,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     it.actionType.contains(search, ignoreCase = true) ||
                     it.details.contains(search, ignoreCase = true)
 
-            val matchesFilter = when (filter) {
-                "Action: Login" -> it.actionType == "Login" || it.actionType == "Fail Login" || it.actionType == "Startup"
-                else -> true
-            }
+            val matchesFilter = if (filter == "All Entities") true else it.actionType == filter
             matchesSearch && matchesFilter
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -1333,15 +1142,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 logAction("Restore DB", "Imported and decrypted backup state snapshot successfully.")
                 
-                // Keep login session preferences safe
-                val activeUsername = loggedInUsername.value
-                val dbUser = repository.getUserByUsername(activeUsername)
-                if (dbUser == null) {
-                    logoutUser()
-                } else {
-                    _currentUserRole.value = dbUser.role
-                    prefs.edit().putString("logged_in_user_role", dbUser.role).apply()
-                }
 
                 onResult(true, "Configurations and databases restored successfully.")
             } catch (e: Exception) {
